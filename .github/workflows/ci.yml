@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +30,11 @@ jobs:
 
       - name: Package tarball
         run: |
-          VERSION=${GITHUB_REF_NAME}
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="$(git rev-parse --short HEAD)"
+          fi
           ARCHIVE="dotnet-test-runner-cli-${VERSION}-linux-x64.tar.gz"
           tar -czf "$ARCHIVE" -C out dotnet-test-runner-cli
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
@@ -45,3 +51,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.ARCHIVE }}
+          token: ${{ secrets.GITHUB_TOKEN }}
