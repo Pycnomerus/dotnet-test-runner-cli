@@ -21,6 +21,7 @@ public abstract record InputAction
     public record DetailScrollUp : InputAction;
     public record DetailScrollRight : InputAction;
     public record DetailScrollLeft : InputAction;
+    public record OpenInEditor : InputAction;
     public record SearchChar(char C) : InputAction;
     public record SearchBackspace : InputAction;
     public record SearchConfirm : InputAction;

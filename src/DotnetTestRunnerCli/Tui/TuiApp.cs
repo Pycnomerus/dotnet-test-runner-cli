@@ -234,6 +234,10 @@ public sealed class TuiApp
                 _dirty = true;
                 break;
 
+            case InputAction.OpenInEditor:
+                await OpenInEditorAsync();
+                break;
+
             case InputAction.ToggleFilter:
                 if (_searchState.HasQuery)
                 {
@@ -430,6 +434,100 @@ public sealed class TuiApp
         return $"{summary}  {BuildHintLine()}";
     }
 
+    private async Task OpenInEditorAsync()
+    {
+        var node = _viewState.CurrentNode;
+        if (node == null) return;
+
+        var editor = GetGitEditor();
+        if (editor == null)
+        {
+            _statusLine = "[red]No git editor configured (GIT_EDITOR / VISUAL / EDITOR).[/]";
+            _dirty = true;
+            return;
+        }
+
+        var file = FindSourceFile(node);
+        if (file == null)
+        {
+            _statusLine = "[yellow]Source file not found for this node.[/]";
+            _dirty = true;
+            return;
+        }
+
+        ExitAltScreen();
+        Console.CursorVisible = true;
+        try
+        {
+            // Split "code --wait" → executable + existing args + file path
+            var parts    = editor.Split(' ', 2);
+            var exe      = parts[0];
+            var editorArgs = (parts.Length > 1 ? parts[1] + " " : "") + $"\"{file}\"";
+            using var p  = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(exe, editorArgs) { UseShellExecute = false });
+            if (p != null) await p.WaitForExitAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to open editor: {ex.Message}");
+            Console.WriteLine("Press any key to return...");
+            Console.ReadKey(intercept: true);
+        }
+        finally
+        {
+            Console.CursorVisible = false;
+            EnterAltScreen();
+            _dirty = true;
+        }
+    }
+
+    private static string? GetGitEditor()
+    {
+        // Prefer the editor git would use, then fall back to standard env vars.
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("git", "var GIT_EDITOR")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+            using var p = System.Diagnostics.Process.Start(psi);
+            var value = p?.StandardOutput.ReadToEnd().Trim();
+            p?.WaitForExit();
+            if (!string.IsNullOrEmpty(value)) return value;
+        }
+        catch { }
+
+        return Environment.GetEnvironmentVariable("VISUAL")
+            ?? Environment.GetEnvironmentVariable("EDITOR");
+    }
+
+    private static string? FindSourceFile(TestNode node)
+    {
+        // Resolve the class name: for a test leaf the class is its parent.
+        var className = node.Type == TestNodeType.Test
+            ? node.Parent?.DisplayName
+            : node.DisplayName;
+        if (string.IsNullOrEmpty(className)) return null;
+
+        var projectPath = node.ProjectPath
+            ?? node.Parent?.ProjectPath
+            ?? node.Parent?.Parent?.ProjectPath;
+        if (projectPath == null) return null;
+
+        var projectDir = Path.GetDirectoryName(projectPath);
+        if (projectDir == null) return null;
+
+        // Search for a .cs file that declares this class.
+        return Directory
+            .EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+            .FirstOrDefault(f =>
+            {
+                try { return File.ReadAllText(f).Contains($"class {className}"); }
+                catch { return false; }
+            });
+    }
+
     private void ResetDetailScroll()
     {
         _detailScrollOffset  = 0;
@@ -446,7 +544,7 @@ public sealed class TuiApp
     }
 
     private static string BuildHintLine(string extra = "") =>
-        $"[dim]q[/]uit [dim]r[/]un [dim]F5[/]refresh [dim]/[/]search [dim]e[/]xpand [dim]Space[/]sel [dim]j/k[/]↑↓ [dim][[[/]/[dim]]][/]↕ [dim]i[/]/[dim]o[/]↔{extra}";
+        $"[dim]q[/]uit [dim]r[/]un [dim]F5[/]refresh [dim]/[/]search [dim]e[/]xpand [dim]Space[/]sel [dim]j/k[/]↑↓ [dim][[[/]/[dim]]][/]↕ [dim]h[/]/[dim]l[/]↔ [dim]o[/]pen{extra}";
 
     private static void EnterAltScreen()
     {
