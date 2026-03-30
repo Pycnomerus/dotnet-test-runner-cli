@@ -76,8 +76,9 @@ public sealed class InputHandler
             'N' => new InputAction.PrevMatch(),
             ']' => new InputAction.DetailScrollDown(),
             '[' => new InputAction.DetailScrollUp(),
-            'o' => new InputAction.DetailScrollRight(),
-            'i' => new InputAction.DetailScrollLeft(),
+            'l' => new InputAction.DetailScrollRight(),
+            'h' => new InputAction.DetailScrollLeft(),
+            'o' => new InputAction.OpenInEditor(),
             'q' => new InputAction.Quit(),
             _ => new InputAction.Unknown()
         };
